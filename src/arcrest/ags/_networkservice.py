@@ -24,6 +24,8 @@ class NetworkService(BaseAGSServer):
     _serviceAreaLayers = None
     _closestFacilityLayers = None
     _serviceLimits = None
+    _defaultTravelMode = None
+    _trafficSupport = None
 
     #----------------------------------------------------------------------
     def __init__(self, url,
@@ -47,7 +49,7 @@ class NetworkService(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -143,8 +145,18 @@ class NetworkService(BaseAGSServer):
         if self._serviceLimits is None:
             self.__init()
         return self._serviceLimits
-
-
+    #----------------------------------------------------------------------
+    @property
+    def defaultTravelMode(self):
+        if self._defaultTravelMode is None:
+            self.__init()
+        return self._defaultTravelMode
+    #----------------------------------------------------------------------
+    @property
+    def trafficSupport(self):
+        if self._trafficSupport  is None:
+            self.__init()
+        return self._trafficSupport
 
 ########################################################################
 class NetworkLayer(BaseAGSServer):
@@ -214,7 +226,7 @@ class NetworkLayer(BaseAGSServer):
         # TODO handle spaces in the url, 'Service Area' should be 'Service+Area'
         self._url = self._url.replace(' ','+')
 
-        json_dict = self._do_get(url=self._url, param_dict=params,
+        json_dict = self._get(url=self._url, param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -371,8 +383,17 @@ class NetworkLayer(BaseAGSServer):
         if self._serviceLimits is None:
             self.__init()
         return self._serviceLimits
-
-
+    #----------------------------------------------------------------------
+    def retrieveTravelModes(self):
+        """identify all the valid travel modes that have been defined on the
+        network dataset or in the portal if the GIS server is federated"""
+        url = self._url + "/retrieveTravelModes"
+        params = {"f":"json"}
+        return self._get(url=url,
+                         param_dict=params,
+                         securityHandler=self._securityHandler,
+                         proxy_url=self._proxy_url,
+                         proxy_port=self._proxy_port)
 ########################################################################
 class RouteNetworkLayer(NetworkLayer):
     """
@@ -408,7 +429,7 @@ class RouteNetworkLayer(NetworkLayer):
         params = {
             "f" : "json"
         }
-        json_dict = self._do_get(url=self._url, param_dict=params,
+        json_dict = self._get(url=self._url, param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -500,7 +521,6 @@ class RouteNetworkLayer(NetworkLayer):
         if self._findBestSequence is None:
             self.__init()
         return self._findBestSequence
-
     #----------------------------------------------------------------------
     def solve(self,stops,
               method="POST",
@@ -753,13 +773,13 @@ class RouteNetworkLayer(NetworkLayer):
             params['returnZ'] = returnZ
 
         if method.lower() == "post":
-            return self._do_post(url=url,
+            return self._post(url=url,
                                  param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         else:
-            return self._do_get(url=url,
+            return self._get(url=url,
                                 param_dict=params,
                                 securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,
@@ -809,7 +829,7 @@ class ServiceAreaNetworkLayer(NetworkLayer):
 
         # TODO handle spaces in the url, 'Service Area' should be 'Service+Area'
         self._url = self._url.replace(' ','+')
-        json_dict = self._do_get(url=self._url, param_dict=params,
+        json_dict = self._get(url=self._url, param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -925,7 +945,6 @@ class ServiceAreaNetworkLayer(NetworkLayer):
         if self._mergeSimilarPolygonRanges is None:
             self.__init()
         return self._mergeSimilarPolygonRanges
-
     #----------------------------------------------------------------------
     def solveServiceArea(self,facilities,method="POST",
                          barriers=None,
@@ -1177,13 +1196,13 @@ class ServiceAreaNetworkLayer(NetworkLayer):
             params['returnZ'] = returnZ
 
         if method.lower() == "post":
-            return self._do_post(url=url,
+            return self._post(url=url,
                                  param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         else:
-            return self._do_get(url=url,
+            return self._get(url=url,
                                 param_dict=params,
                                 securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,
@@ -1228,7 +1247,7 @@ class ClosestFacilityNetworkLayer(NetworkLayer):
 
         # TODO handle spaces in the url, 'Closest Facility' should be 'Closest+Facility'
         self._url = self._url.replace(' ','+')
-        json_dict = self._do_get(url=self._url, param_dict=params,
+        json_dict = self._get(url=self._url, param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -1314,7 +1333,6 @@ class ClosestFacilityNetworkLayer(NetworkLayer):
         if self._timeOfDay is None:
             self.__init()
         return self._timeOfDay
-
     #----------------------------------------------------------------------
     def solveClosestFacility(self,incidents,facilities,method="POST",
                              barriers=None,
@@ -1572,13 +1590,13 @@ class ClosestFacilityNetworkLayer(NetworkLayer):
             params['returnZ'] = returnZ
 
         if method.lower() == "post":
-            return self._do_post(url=url,
+            return self._post(url=url,
                                  param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
         else:
-            return self._do_get(url=url,
+            return self._get(url=url,
                                 param_dict=params,
                                 securityHandler=self._securityHandler,
                                 proxy_url=self._proxy_url,

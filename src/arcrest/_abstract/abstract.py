@@ -1,18 +1,22 @@
 from __future__ import absolute_import
-import six
-if six.PY2:
-    import httplib
-    from ..web._base import BaseWebOperations as BaseWebOperations
-elif six.PY3:
-    from six.moves import http_client as httplib
-    from ..web._base import BaseWebOperations3 as BaseWebOperations
-
 import zipfile
 import datetime
 import calendar
 import glob
 import mimetypes
 import os
+from ..packages import six
+from ..packages.six.moves import http_client as httplib
+from ..web._base import BaseWebOperations
+
+###########################################################################
+class BaseCMP(BaseWebOperations):
+    """ base community mapping program class"""
+    pass
+class BaseOpenData(BaseWebOperations):
+    """ base opendata site"""
+    pass
+########################################################################
 class BaseGeoEnrichment(BaseWebOperations):
     """ base geoenrichment class """
     pass
@@ -75,7 +79,6 @@ class BaseSecurityHandler(BaseWebOperations):
     def valid(self):
         """ returns boolean wether handler is valid """
         return self._valid
-
 ########################################################################
 class AbstractGeometry(object):
     """ Base Geometry Class """
@@ -142,11 +145,15 @@ class BaseAGSServer(BaseWebOperations):
     def _unicode_convert(self, obj):
         """ converts unicode to anscii """
         if isinstance(obj, dict):
-            return {self._unicode_convert(key): self._unicode_convert(value) for key, value in obj.iteritems()}
+            return {self._unicode_convert(key): self._unicode_convert(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [self._unicode_convert(element) for element in obj]
-        elif isinstance(obj, unicode):
+        elif isinstance(obj, str):
+            return obj 
+        elif isinstance(obj, six.text_type):
             return obj.encode('utf-8')
+        elif isinstance(obj, six.integer_types):
+            return obj
         else:
             return obj
 # This function is a workaround to deal with what's typically described as a
@@ -262,10 +269,14 @@ class BaseAGOLClass(BaseWebOperations):
     def _unicode_convert(self, obj):
         """ converts unicode to anscii """
         if isinstance(obj, dict):
-            return {self._unicode_convert(key): self._unicode_convert(value) for key, value in obj.iteritems()}
+            return {self._unicode_convert(key): self._unicode_convert(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [self._unicode_convert(element) for element in obj]
-        elif isinstance(obj, unicode):
+        elif isinstance(obj, str):
+            return obj 
+        elif isinstance(obj, six.text_type):
             return obj.encode('utf-8')
+        elif isinstance(obj, six.integer_types):
+            return obj
         else:
             return obj

@@ -11,7 +11,7 @@ def trace():
         and error message and returns it
         to the user
     """
-    import traceback, inspect
+    import traceback, inspect, sys
     tb = sys.exc_info()[2]
     tbinfo = traceback.format_tb(tb)[0]
     filename = inspect.getfile(inspect.currentframe())
@@ -82,9 +82,10 @@ def main():
             itemParams.tags = "tags"
             itemParams.snippet = "Test File"
             itemParams.typeKeywords = "Data,Image,png"
-            itemParams.filename = upload_file
+            #itemParams.filename = upload_file
             item = userInfo.addItem(
                 itemParameters=itemParams,
+                filePath= upload_file,
                 overwrite=True,
                 relationshipType=None,
                 originItemId=None,

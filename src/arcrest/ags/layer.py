@@ -1,17 +1,20 @@
 from __future__ import absolute_import
 from __future__ import print_function
+from __future__ import division
 import os
 import json
 import uuid
-from six.moves import urllib_parse as urlparse
+from ..packages.six.moves import urllib_parse as urlparse
 from .._abstract.abstract import BaseAGSServer
 from ..security import security
 from .._abstract.abstract import DynamicData, DataSource
-from ..common.spatial import scratchFolder, json_to_featureclass
+from ..common.spatial import scratchFolder, json_to_featureclass, \
+    featureclass_to_json
 from ..common import filters
 from ..common.general import _date_handler, Feature, FeatureSet
+from ..agol.services import FeatureLayer
 ########################################################################
-class FeatureLayer(BaseAGSServer):
+class FeatureLayer_Depricated(BaseAGSServer):
     """
        This contains information about a feature service's layer.
     """
@@ -55,9 +58,12 @@ class FeatureLayer(BaseAGSServer):
     _useStandardizedQueries = None
     _securityHandler = None
     _supportsRollbackOnFailureParameter = None
+    _supportsApplyEditsWithGlobalIds = None
     _globalIdField = None
+    _supportsValidateSQL = None
     _syncCanReturnChanges = None
     _allowGeometryUpdates = None
+    _supportsCalculate = None
     _objectIdField = None
     _templates = None
     _editFieldsInfo = None
@@ -65,6 +71,11 @@ class FeatureLayer(BaseAGSServer):
     _proxy_port = None
     _json = None
     _advancedQueryCapabilities = None
+    _indexes = None
+    _standardMaxRecordCount = None
+    _tileMaxRecordCount = None
+    _maxRecordCountFactor = None
+    _dateFieldsTimeReference = None
     #----------------------------------------------------------------------
     def __init__(self, url, securityHandler=None,
                  initialize=False,
@@ -99,7 +110,7 @@ class FeatureLayer(BaseAGSServer):
     def __init(self):
         """ inializes the properties """
         params = {"f" : "json"}
-        json_dict = self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -112,6 +123,13 @@ class FeatureLayer(BaseAGSServer):
                 setattr(self, "_"+ k, v)
             else:
                 print("%s - attribute not implemented for layer.FeatureLayer." % k)
+    #----------------------------------------------------------------------
+    @property
+    def indexes(self):
+        """ gets the indexes for the Featurelayer object"""
+        if self._indexes is None:
+            self.__init()
+        return self._indexes
     #----------------------------------------------------------------------
     @property
     def advancedQueryCapabilities(self):
@@ -147,6 +165,34 @@ class FeatureLayer(BaseAGSServer):
         if self._allowGeometryUpdates is None:
             self.__init()
         return self._allowGeometryUpdates
+    #----------------------------------------------------------------------
+    @property
+    def supportsCalculate(self):
+        """ returns the boolean value """
+        if self._supportsCalculate is None:
+            self.__init()
+        return self._supportsCalculate
+    #----------------------------------------------------------------------
+    @property
+    def supportsApplyEditsWithGlobalIds(self):
+        """ returns the boolean value """
+        if self._supportsApplyEditsWithGlobalIds is None:
+            self.__init()
+        return self._supportsApplyEditsWithGlobalIds
+    #----------------------------------------------------------------------
+    @property
+    def supportsValidateSQL(self):
+        """ returns the boolean value """
+        if self._supportsValidateSQL is None:
+            self.__init()
+        return self._supportsValidateSQL
+    #----------------------------------------------------------------------
+    @property
+    def dateFieldsTimeReference(self):
+        """ returns the boolean value """
+        if self._dateFieldsTimeReference is None:
+            self.__init()
+        return self._dateFieldsTimeReference
     #----------------------------------------------------------------------
     @property
     def objectIdField(self):
@@ -243,7 +289,13 @@ class FeatureLayer(BaseAGSServer):
     def parentLayer(self):
         """ returns information about the parent """
         if self._parentLayer is None:
+            from ..agol.services import FeatureService
             self.__init()
+            url = os.path.dirname(self._url)
+            self._parentLayer = FeatureService(url=url,
+                                               securityHandler=self._securityHandler,
+                                               proxy_url=self._proxy_url,
+                                               proxy_port=self._proxy_port)
         return self._parentLayer
     #----------------------------------------------------------------------
     @property
@@ -394,6 +446,27 @@ class FeatureLayer(BaseAGSServer):
             self.__init()
         return self._useStandardizedQueries
     #----------------------------------------------------------------------
+    @property
+    def standardMaxRecordCount(self):
+        """ returns the standardMaxRecordCount for the feature layer"""
+        if self._standardMaxRecordCount is None:
+            self.__init()
+        return self._standardMaxRecordCount
+    #----------------------------------------------------------------------
+    @property
+    def tileMaxRecordCount(self):
+        """ returns the tileMaxRecordCount for the feature layer"""
+        if self._tileMaxRecordCount is None:
+            self.__init()
+        return self._tileMaxRecordCount
+    #----------------------------------------------------------------------
+    @property
+    def maxRecordCountFactor(self):
+        """ returns the maxRecordCountFactor for the feature layer"""
+        if self._maxRecordCountFactor is None:
+            self.__init()
+        return self._maxRecordCountFactor
+    #----------------------------------------------------------------------
     def addFeature(self, features,
                    gdbVersion=None,
                    rollbackOnFailure=True):
@@ -430,11 +503,119 @@ class FeatureLayer(BaseAGSServer):
                                             default=_date_handler)
         else:
             return None
-        return self._do_post(url=url,
+        return self._post(url=url,
                              securityHandler=self._securityHandler,
                              param_dict=params, proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
+
     #----------------------------------------------------------------------
+    def _chunks(self, l, n):
+        """ Yield n successive chunks from a list l.
+        """
+        l.sort()
+        newn = int(1.0 * len(l) / n + 0.5)
+        for i in range(0, n-1):
+            yield l[i*newn:i*newn+newn]
+        yield l[n*newn-newn:]
+    #----------------------------------------------------------------------
+    def addFeatures(self, fc, attachmentTable=None,
+                    nameField="ATT_NAME", blobField="DATA",
+                    contentTypeField="CONTENT_TYPE",
+                    rel_object_field="REL_OBJECTID",
+                    lowerCaseFieldNames=False):
+        """ adds a feature to the feature service
+           Inputs:
+              fc - string - path to feature class data to add.
+              attachmentTable - string - (optional) path to attachment table
+              nameField - string - (optional) name of file field in attachment table
+              blobField - string - (optional) name field containing blob data
+              contentTypeField - string - (optional) name of field containing content type
+              rel_object_field - string - (optional) name of field with OID of feature class
+           Output:
+              boolean, add results message as list of dictionaries
+
+        """
+        messages = {'addResults':[]}
+
+        if attachmentTable is None:
+            count = 0
+            bins = 1
+            uURL = self._url + "/addFeatures"
+            max_chunk = 250
+            js = json.loads(self._unicode_convert(
+                featureclass_to_json(fc)))
+            js = js['features']
+            if lowerCaseFieldNames == True:
+                for feat in js:
+                    feat['attributes'] = dict((k.lower(), v) for k,v in feat['attributes'].items())
+            if len(js) == 0:
+                return {'addResults':None}
+            if len(js) <= max_chunk:
+                bins = 1
+            else:
+                bins = int(len(js)/max_chunk)
+                if len(js) % max_chunk > 0:
+                    bins += 1
+            chunks = self._chunks(l=js, n=bins)
+            for chunk in chunks:
+                params = {
+                    "f" : 'json',
+                    "features"  : json.dumps(chunk,
+                                             default=_date_handler)
+                }
+
+                result = self._post(url=uURL, param_dict=params,
+                                       securityHandler=self._securityHandler,
+                                       proxy_port=self._proxy_port,
+                                       proxy_url=self._proxy_url)
+                if messages is None:
+                    messages = result
+                else:
+                    if 'addResults' in result:
+                        if 'addResults' in messages:
+                            messages['addResults'] = messages['addResults'] + result['addResults']
+                        else:
+                            messages['addResults'] = result['addResults']
+                    else:
+                        messages['errors'] = result
+
+                del params
+                del result
+            return messages
+        else:
+            oid_field = get_OID_field(fc)
+            OIDs = get_records_with_attachments(attachment_table=attachmentTable)
+            fl = create_feature_layer(fc, "%s not in ( %s )" % (oid_field, ",".join(OIDs)))
+            result = self.addFeatures(fl)
+            if result is not None:
+                messages.update(result)
+            del fl
+            for oid in OIDs:
+                fl = create_feature_layer(fc, "%s = %s" % (oid_field, oid), name="layer%s" % oid)
+                msgs = self.addFeatures(fl)
+                for result in msgs['addResults']:
+                    oid_fs = result['objectId']
+                    sends = get_attachment_data(attachmentTable, sql="%s = %s" % (rel_object_field, oid))
+                    result['addAttachmentResults'] = []
+                    for s in sends:
+                        attRes = self.addAttachment(oid_fs, s['blob'])
+
+                        if 'addAttachmentResult' in attRes:
+                            attRes['addAttachmentResult']['AttachmentName'] = s['name']
+                            result['addAttachmentResults'].append(attRes['addAttachmentResult'])
+                        else:
+                            attRes['AttachmentName'] = s['name']
+                            result['addAttachmentResults'].append(attRes)
+                        del s
+                    del sends
+                    del result
+                messages.update( msgs)
+                del fl
+                del oid
+            del OIDs
+            return messages
+    #----------------------------------------------------------------------
+
     def addAttachments(self,
                        featureId,
                        attachment,
@@ -481,19 +662,14 @@ class FeatureLayer(BaseAGSServer):
                 params['uploadId'] = uploadId
             if not gdbVersion is None:
                 params['gdbVersion'] = gdbVersion
-            parsed = urlparse(url)
-            files = []
-            files.append(('attachment', attachment, os.path.basename(attachment)))
-            res = self._post_multipart(host=parsed.hostname,
-                                       selector=parsed.path,
-                                       files=files,
-                                       fields=params,
-                                       port=parsed.port,
-                                       securityHandler=self._securityHandler,
-                                       ssl=parsed.scheme.lower() == 'https',
-                                       proxy_url=self._proxy_url,
-                                       proxy_port=self._proxy_port)
-            return self._unicode_convert(res)
+            files = {}
+            files['attachment'] = attachment
+            return self._post(url=url,
+                              param_dict=params,
+                              files=files,
+                              securityHandler=self._securityHandler,
+                              proxy_url=self._proxy_url,
+                              proxy_port=self._proxy_port)
         else:
             return "Attachments are not supported for this feature service."
     #----------------------------------------------------------------------
@@ -546,7 +722,7 @@ class FeatureLayer(BaseAGSServer):
         if objectIds is not None and \
            objectIds != "":
             params['objectIds'] = objectIds
-        result = self._do_post(url=dURL, param_dict=params,
+        result = self._post(url=dURL, param_dict=params,
                                securityHandler=self._securityHandler,
                                proxy_port=self._proxy_port,
                                proxy_url=self._proxy_url)
@@ -603,7 +779,7 @@ class FeatureLayer(BaseAGSServer):
         if deleteFeatures is not None and \
            isinstance(deleteFeatures, str):
             params['deletes'] = deleteFeatures
-        return self._do_post(url=editURL, param_dict=params,
+        return self._post(url=editURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -640,7 +816,7 @@ class FeatureLayer(BaseAGSServer):
         else:
             return {'message' : "invalid inputs"}
         updateURL = self._url + "/updateFeatures"
-        res = self._do_post(url=updateURL,
+        res = self._post(url=updateURL,
                             securityHandler=self._securityHandler,
                             param_dict=params, proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
@@ -738,7 +914,7 @@ class FeatureLayer(BaseAGSServer):
            isinstance(statisticFilter, filters.StatisticFilter):
             params['outStatistics'] = statisticFilter.filter
         fURL = self._url + "/query"
-        results = self._do_post(fURL, params,
+        results = self._post(fURL, params,
                                securityHandler=self._securityHandler,
                                proxy_port=self._proxy_port,
                                proxy_url=self._proxy_url)
@@ -762,6 +938,98 @@ class FeatureLayer(BaseAGSServer):
         else:
             return results
         return
+    #----------------------------------------------------------------------
+    def queryRelatedRecords(self,
+                            objectIds,
+                            relationshipId,
+                            outFields="*",
+                            definitionExpression=None,
+                            returnGeometry=True,
+                            maxAllowableOffset=None,
+                            geometryPrecision=None,
+                            outWKID=None,
+                            gdbVersion=None,
+                            returnZ=False,
+                            returnM=False):
+        """
+           The Query Related Records operation is performed on a feature service
+           layer resource. The result of this operation are feature sets grouped
+           by source layer/table object IDs. Each feature set contains
+           Feature objects including the values for the fields requested by
+           the user. For related layers, if you request geometry
+           information, the geometry of each feature is also returned in
+           the feature set. For related tables, the feature set does not
+           include geometries. All parameters related to geometry are
+           ignored when querying related tables.
+           Inputs:
+              objectIds - The object IDs of the table/layer to be queried.
+              relationshipId - The ID of the relationship to be queried.
+              outFields - The list of fields from the related table/layer
+                          to be included in the returned feature set. This
+                          list is a comma delimited list of field names. If
+                          you specify the shape field in the list of return
+                          fields, it is ignored. To request geometry, set
+                          returnGeometry to true.
+                          You can also specify the wildcard "*" as the
+                          value of this parameter. In this case, the result
+                          s will include all the field values.
+              definitionExpression - The definition expression to be
+                                     applied to the related table/layer.
+                                     From the list of objectIds, only those
+                                     records that conform to this
+                                     expression are queried for related
+                                     records.
+              returnGeometry - If true, the feature set includes the
+                               geometry associated with each feature. The
+                               default is true.
+              maxAllowableOffset - This option can be used to specify the
+                                   maxAllowableOffset to be used for
+                                   generalizing geometries returned by the
+                                   query operation. The maxAllowableOffset
+                                   is in the units of the outSR. If outSR
+                                   is not specified, then
+                                   maxAllowableOffset is assumed to be in
+                                   the unit of the spatial reference of the
+                                   map.
+              geometryPrecision - This option can be used to specify the
+                                  number of decimal places in the response
+                                  geometries.
+              outWKID - The WKID for the spatial reference of the
+                        returned geometry.
+              gdbVersion - The geodatabase version to query. This parameter
+                           applies only if the isDataVersioned property of
+                           the layer queried is true.
+              returnZ - If true, Z values are included in the results if
+                        the features have Z values. Otherwise, Z values are
+                        not returned. The default is false.
+              returnM - If true, M values are included in the results if
+                        the features have M values. Otherwise, M values are
+                        not returned. The default is false.
+        """
+        params = {
+            "f" : "json",
+            "objectIds" : objectIds,
+            "relationshipId" : relationshipId,
+            "outFields" : outFields,
+            "returnGeometry" : returnGeometry,
+            "returnM" : returnM,
+            "returnZ" : returnZ
+        }
+        if gdbVersion is not None:
+            params['gdbVersion'] = gdbVersion
+        if definitionExpression is not None:
+            params['definitionExpression'] = definitionExpression
+        if outWKID is not None:
+            params['outSR'] = geometry.SpatialReference(outWKID).asDictionary
+        if maxAllowableOffset is not None:
+            params['maxAllowableOffset'] = maxAllowableOffset
+        if geometryPrecision is not None:
+            params['geometryPrecision'] = geometryPrecision
+        quURL = self._url + "/queryRelatedRecords"
+        res = self._get(url=quURL, param_dict=params,
+                        securityHandler=self._securityHandler,
+                        proxy_url=self._proxy_url, proxy_port=self._proxy_port)
+        return res
     #----------------------------------------------------------------------
     def calculate(self, where, calcExpression, sqlFormat="standard"):
         """
@@ -817,7 +1085,7 @@ class FeatureLayer(BaseAGSServer):
             params['sqlFormat'] = sqlFormat.lower()
         else:
             params['sqlFormat'] = "standard"
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
@@ -860,7 +1128,7 @@ class FeatureLayer(BaseAGSServer):
             "sql" : sql,
             "sqlType" : sqlType
         }
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -897,10 +1165,11 @@ class GroupLayer(FeatureLayer):
         }
         if self._securityHandler is not None:
             params['token'] = self._securityHandler.token
-        json_dict = json.loads(self._do_get(self._url, params,
+        json_dict = self._get(self._url, params,
                                             securityHandler=self._securityHandler,
                                             proxy_url=self._proxy_url,
-                                            proxy_port=self._proxy_port))
+                                            proxy_port=self._proxy_port)
+        self._json = json.dumps(json_dict)
         attributes = [attr for attr in dir(self)
                       if not attr.startswith('__') and \
                       not attr.startswith('_')]
@@ -909,6 +1178,10 @@ class GroupLayer(FeatureLayer):
                 setattr(self, "_"+ k, v)
             else:
                 print("%s - attribute not implemented in GroupLayer." % k)
+########################################################################
+class SchematicsLayer(FeatureLayer):
+    """ represents a Schematics Layer  """
+    pass
 ########################################################################
 class TableLayer(FeatureLayer):
     """Table object is exactly like FeatureLayer object"""

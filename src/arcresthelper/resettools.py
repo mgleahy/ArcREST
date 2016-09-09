@@ -1,5 +1,7 @@
+from __future__ import print_function
+from __future__ import absolute_import
 
-from securityhandlerhelper import securityhandlerhelper
+from .securityhandlerhelper import securityhandlerhelper
 
 dateTimeFormat = '%Y-%m-%d %H:%M'
 import arcrest
@@ -9,17 +11,27 @@ from arcrest.hostedservice import AdminFeatureService
 import datetime, time
 import json
 import os
-import common 
+from . import common
 import gc
 
 #----------------------------------------------------------------------
 def trace():
+    """Determines information about where an error was thrown.
+
+    Returns:
+        tuple: line number, filename, error message
+    Examples:
+        >>> try:
+        ...     1/0
+        ... except:
+        ...     print("Error on '{}'\\nin file '{}'\\nwith error '{}'".format(*trace()))
+        ...        
+        Error on 'line 1234'
+        in file 'C:\\foo\\baz.py'
+        with error 'ZeroDivisionError: integer division or modulo by zero'
+        
     """
-        trace finds the line, the filename
-        and error message and returns it
-        to the user
-    """
-    import traceback, inspect, sys 
+    import traceback, inspect, sys
     tb = sys.exc_info()[2]
     tbinfo = traceback.format_tb(tb)[0]
     filename = inspect.getfile(inspect.currentframe())
@@ -31,19 +43,20 @@ def trace():
     return line, filename, synerror
 
 class resetTools(securityhandlerhelper):
-  
+
     #----------------------------------------------------------------------
-    def removeUserData(self,users=None):
-        """
-            This function deletes content for the list of users,
-            if no users are specified, all users in the org are queried
-            and their content is deleted.
-    
-            Inputs:
-            users - Comma delimited list of user names
-            
-        """          
+    def removeUserData(self, users=None):
+        """Removes users' content and data.
         
+        Args:
+            users (str): A comma delimited list of user names.
+                Defaults to ``None``.
+        
+        Warning:
+            When ``users`` is not provided (``None``), all users
+            in the organization will have their data deleted!
+        
+        """ 
         admin = None
         portal = None
         user = None
@@ -55,27 +68,32 @@ class resetTools(securityhandlerhelper):
         try:
             admin = arcrest.manageorg.Administration(securityHandler=self._securityHandler)
             if users is None:
-                print "You have selected to remove all users data, you must modify the code to do this"
+                print ("You have selected to remove all users data, you must modify the code to do this")
                 usersObj = []
                 commUsers = admin.portals.portalSelf.users(start=1, num=100)
                 commUsers = commUsers['users']
                 for user in commUsers:
-                    usersObj.append(user.userContent)            
+                    usersObj.append(user.userContent)
                 return
             else:
                 usersObj = []
                 userStr = users.split(',')
                 for user in userStr:
-                    usersObj.append(admin.content.users.user(str(user).strip()))
+                    try:
+                        user = admin.content.users.user(str(user).strip())
+                        usersObj.append(user)
+                    except:
+                        print ("%s does not exist" % str(user).strip())
+
             if usersObj:
                 for user in usersObj:
-                    print "Loading content for user: %s" % user.username
-                     
+                    print ("Loading content for user: %s" % user.username)
+
                     itemsToDel = []
                     for userItem in user.items:
                         itemsToDel.append(userItem.id)
                     if len(itemsToDel) > 0:
-                        print user.deleteItems(items=",".join(itemsToDel))    
+                        print (user.deleteItems(items=",".join(itemsToDel)))
                     if user.folders:
                         for userFolder in user.folders:
                             if (user.currentFolder['title'] != userFolder['title']):
@@ -84,10 +102,10 @@ class resetTools(securityhandlerhelper):
                                 for userItem in user.items:
                                     itemsToDel.append(userItem.id)
                                 if len(itemsToDel) > 0:
-                                    print user.deleteItems(items=",".join(itemsToDel))                               
-    
-                                print user.deleteFolder()
-       
+                                    print (user.deleteItems(items=",".join(itemsToDel)))
+
+                                print (user.deleteFolder())
+
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -118,18 +136,19 @@ class resetTools(securityhandlerhelper):
 
             gc.collect()
 
-
     #----------------------------------------------------------------------
-    def removeUserGroups(self,users=None):
-        """
-            This function deletes all groups for the list of users,
-            if no users are specified, all users in the org are queried
-            and their groups is deleted.
-    
-            Inputs:
-            users - Comma delimted list of user names
-            
-            """        
+    def removeUserGroups(self, users=None):
+        """Removes users' groups.
+        
+        Args:
+            users (str): A comma delimited list of user names.
+                Defaults to ``None``.
+        
+        Warning:
+            When ``users`` is not provided (``None``), all users
+            in the organization will have their groups deleted!
+        
+        """ 
         admin = None
         userCommunity = None
         portal = None
@@ -138,33 +157,35 @@ class resetTools(securityhandlerhelper):
         userCommData = None
         group = None
         try:
-           
+
             admin = arcrest.manageorg.Administration(securityHandler=self._securityHandler)
             if users is None:
-                print "You have selected to remove all users groups, you must modify the code to do this"
+                print ("You have selected to remove all users groups, you must modify the code to do this")
                 usersObj = []
                 commUsers = admin.portals.portalSelf.users(start=1, num=100)
                 usersObj = commUsers['users']
-            
+
                 return
             else:
                 usersObj = []
                 userStr = users.split(',')
                 for user in userStr:
-                    usersObj.append(admin.community.users.user(str(user).strip()))
+                    try:
+                        user = admin.community.users.user(str(user).strip())
+                        usersObj.append(user)
+                    except:
+                        print ("%s does not exist" % str(user).strip())
             if usersObj:
                 for userCommData in usersObj:
-                    print "Loading groups for user: %s" % userCommData.username
-                     
+                    print ("Loading groups for user: %s" % userCommData.username)
+
                     if userCommData.groups:
                         for group in userCommData.groups:
                             groupObj = admin.community.groups.group(groupId=group['id'])
                             if groupObj.owner == userCommData.username:
-                                print groupObj.delete()
+                                print (groupObj.delete())
                     else:
-                        print "No Groups Found"
-
-       
+                        print ("No Groups Found")
         except:
             line, filename, synerror = trace()
             raise common.ArcRestHelperError({
@@ -192,4 +213,3 @@ class resetTools(securityhandlerhelper):
             del group
 
             gc.collect()
-

@@ -1,14 +1,19 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import six
+from ..packages import six
+
 import os
 import shutil
 from xml.etree import ElementTree as ET
 
 if six.PY2:
-    import arcpy
-    from arcpy import mapping
-    from arcpy import env
+    try:
+        import arcpy
+        from arcpy import mapping
+        from arcpy import env
+        arcpyFound = True
+    except:
+        arcpyFound = False
 
     ########################################################################
     def MXDtoFeatureServiceDef( mxd_path,
@@ -34,8 +39,10 @@ if six.PY2:
                       Values: ARCGIS_SERVER | FROM_CONNECTION_FILE | SPATIAL_DATA_SERVER | MY_HOSTED_SERVICES
             Output:
                 Service Definition File - *.sd
-
         """
+        if arcpyFound == False:
+            return
+        
         if not os.path.isabs(mxd_path):
             sciptPath = os.getcwd()
             mxd_path = os.path.join(sciptPath,mxd_path)
@@ -106,7 +113,8 @@ if six.PY2:
                         url='http://www.arcgis.com'):
         """ modifies the sddraft for agol publishing
         """
-
+        if arcpyFound == False:
+            return
         doc = ET.parse(sddraft)
 
         root_elem = doc.getroot()
@@ -171,6 +179,8 @@ if six.PY2:
 
     #----------------------------------------------------------------------
     def _prep_mxd(mxd):
+        if arcpyFound == False:
+            return
         """ ensures the requires mxd properties are set to something """
         changed = False
         if mxd.author.strip() == "":

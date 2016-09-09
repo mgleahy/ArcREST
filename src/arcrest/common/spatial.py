@@ -3,6 +3,7 @@ Contains all the spatial functions
 """
 from __future__ import absolute_import
 from __future__ import print_function
+from __future__ import division
 import os, datetime
 try:
     import arcpy
@@ -10,6 +11,7 @@ try:
     arcpyFound = True
 except:
     arcpyFound = False
+from ..packages import six
 #----------------------------------------------------------------------
 def create_feature_layer(ds, sql, name="layer"):
     """ creates a feature layer object """
@@ -24,7 +26,11 @@ def featureclass_to_json(fc):
     """converts a feature class to JSON"""
     if arcpyFound == False:
         raise Exception("ArcPy is required to use this function")
-    return arcpy.FeatureSet(fc).JSON
+    desc = arcpy.Describe(fc)
+    if desc.dataType == "Table" or desc.dataType == "TableView":
+        return recordset_to_json(table=fc)
+    else:
+        return arcpy.FeatureSet(fc).JSON
 #----------------------------------------------------------------------
 def recordset_to_json(table):
     """ converts the table to JSON """
@@ -76,7 +82,7 @@ def get_attachment_data(attachmentTable, sql,
     return ret_rows
 #----------------------------------------------------------------------
 def get_records_with_attachments(attachment_table, rel_object_field="REL_OBJECTID"):
-    """"""
+    """returns a list of ObjectIDs for rows in the attachment table"""
     if arcpyFound == False:
         raise Exception("ArcPy is required to use this function")
     OIDs = []
@@ -280,10 +286,14 @@ def _unicode_convert(obj):
     if isinstance(obj, dict):
         return {_unicode_convert(key): \
                 _unicode_convert(value) \
-                for key, value in obj.iteritems()}
+                for key, value in obj.items()}
     elif isinstance(obj, list):
         return [_unicode_convert(element) for element in obj]
-    elif isinstance(obj, unicode):
+    elif isinstance(obj, str):
+        return obj 
+    elif isinstance(obj, six.text_type):
         return obj.encode('utf-8')
+    elif isinstance(obj, six.integer_types):
+        return obj
     else:
         return obj

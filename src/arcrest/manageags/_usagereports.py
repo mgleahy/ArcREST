@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import six
+from ..packages import six
 from .._abstract.abstract import BaseAGSServer
 import json
 ########################################################################
@@ -39,7 +39,7 @@ class UsageReports(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        json_dict = self._do_get(url=self._url, param_dict=params,
+        json_dict = self._get(url=self._url, param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -101,7 +101,7 @@ class UsageReports(BaseAGSServer):
             "f" : "json"
         }
         url = self._url + "/settings"
-        return self._do_get(url=url,
+        return self._get(url=url,
                             param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
@@ -133,7 +133,7 @@ class UsageReports(BaseAGSServer):
             "samplingInterval"  : samplingInterval
         }
         url = self._url + "/settings/edit"
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -249,21 +249,21 @@ class UsageReports(BaseAGSServer):
 
         params = {
             "f" : "json",
+            "usagereport": {
             "reportname" : reportname,
             "since" : since,
-
-            "metadata" : metadata
+            "metadata" : metadata}
         }
         if isinstance(queries, dict):
-            params["queries"] = [queries]
+            params["usagereport"]["queries"] = [queries]
         elif isinstance(queries, list):
-            params["queries"] = queries
+            params["usagereport"]["queries"] = queries
         if aggregationInterval is not None:
-            params['aggregationInterval'] = aggregationInterval
+            params["usagereport"]['aggregationInterval'] = aggregationInterval
         if since.lower() == "custom":
-            params['to'] = toValue
-            params['from'] = fromValue
-        res =  self._do_post(url=url,
+            params["usagereport"]['to'] = toValue
+            params["usagereport"]['from'] = fromValue
+        res =  self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
@@ -311,7 +311,7 @@ class UsageReport(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        json_dict = self._do_get(url=self._url, param_dict=params,
+        json_dict = self._get(url=self._url, param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_url=self._proxy_url,
                                  proxy_port=self._proxy_port)
@@ -445,7 +445,7 @@ class UsageReport(BaseAGSServer):
             "usagereport" : json.dumps(usagereport_dict)
         }
         url = self._url + "/edit"
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -457,7 +457,7 @@ class UsageReport(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
@@ -494,7 +494,7 @@ class UsageReport(BaseAGSServer):
             "filter" : queryFilter
         }
         url = self._url + "/data"
-        return self._do_post(url=url,
+        return self._post(url=url,
                              param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,

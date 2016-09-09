@@ -38,9 +38,8 @@ class Uploads(BaseAGSServer):
         params = {
             "f" :"json"
         }
-        return self._do_get(url=self._url,
+        return self._get(url=self._url,
                             param_dict=params,
-                            header={},
                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
@@ -56,7 +55,7 @@ class Uploads(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        return self._do_post(url=url, param_dict=params,
+        return self._post(url=url, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_url=self._proxy_url,
                              proxy_port=self._proxy_port)
@@ -79,27 +78,31 @@ class Uploads(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        return self._do_get(url=url, param_dict=params,
+        return self._get(url=url, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_url=self._proxy_url,
                             proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     def uploadItem(self, filePath, description):
-        """"""
+        """
+        This operation uploads an item to the server. Each uploaded item is 
+        identified by a unique itemID. Since this request uploads a file, it 
+        must be a multi-part request as per IETF RFC1867. 
+        
+        Inputs:
+            filePath - the file to be uploaded.
+            description - optional description for the uploaded item.
+        """
         import urlparse
         url = self._url + "/upload"
         params = {
             "f" : "json"
         }
-        files = []
-        files.append(('itemFile', filePath, os.path.basename(filePath)))
-        parsed = urlparse.urlparse(url)
-        return self._post_multipart(host=parsed.hostname,
-                                       selector=parsed.path,
-                                       files = files,
-                                       fields=params,
-                                       port=parsed.port,
-                                       securityHandler=self._securityHandler,
-                                       ssl=parsed.scheme.lower() == 'https',
-                                       proxy_port=self._proxy_port,
-                                       proxy_url=self._proxy_url)
+        files = {}
+        files['itemFile'] = filePath
+        return self._post(url=url,
+                          param_dict=params,
+                          files=files,
+                          securityHandler=self._securityHandler,
+                          proxy_url=self._proxy_url,
+                          proxy_port=self._proxy_port)

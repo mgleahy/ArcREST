@@ -3,14 +3,18 @@
     @contact: ArcGISTeamUtilities@esri.com
     @company: Esri
     @version: 1.1
-    @description: Used to append content from a feature service
+    @description: Used to append content from a group to a feature service
     @requirements: Python 2.7.x, ArcGIS 10.2.1
-    @copyright: Esri, 2014
+    @copyright: Esri, 2016
 '''
+from __future__ import print_function
 import gc
 import os
 import sys
 import arcpy
+import re
+import random
+import string
 
 from arcresthelper import featureservicetools
 from arcresthelper import common
@@ -39,8 +43,16 @@ def outputPrinter(message,typeOfMessage='message'):
     else:
         arcpy.AddMessage(message=message)
 
-    print message
-def main():
+    print (message)
+#----------------------------------------------------------------------
+def random_string_generator(size=6, chars=string.ascii_uppercase):
+    try:
+        return ''.join(random.choice(chars) for _ in range(size))
+    except:
+        return 'noRandVal'
+    finally:
+        pass
+def main(*argv):
 
     fsId = None
     groupLayer = None
@@ -54,13 +66,15 @@ def main():
     fieldList = None
     layerToServiceLayer = None
     matches = False
+    showFullResponse = False
+
     try:
+        arcpy.env.overwriteOutput = True
 
         proxy_port = None
         proxy_url = None
 
         securityinfo = {}
-        securityinfo['security_type'] = 'ArcGIS'#LDAP, NTLM, OAuth, Portal, PKI
 
         securityinfo['proxy_url'] = proxy_url
         securityinfo['proxy_port'] = proxy_port
@@ -71,18 +85,50 @@ def main():
         securityinfo['client_id'] = None
         securityinfo['secret_id'] = None
 
-        fsId = arcpy.GetParameterAsText(1)
-        groupLayer = arcpy.GetParameterAsText(0)
-        layerMap = arcpy.GetParameterAsText(2)
-        matchEntireName = arcpy.GetParameterAsText(3)
-        projection = arcpy.GetParameterAsText(4)
+        username = argv[0]
+        password = argv[1]
+        siteURL = argv[2]
+
+        version = arcpy.GetInstallInfo()['Version']
+        if re.search("^10\.[0-2]", version) is not None:
+            bReqUserName = True
+        else:
+            bReqUserName = False
+
+        if bReqUserName and \
+            (username == None or username == "#" or str(username).strip() == "" or \
+             password == None or password== "#" or password== "*" or str(password).strip() == ""):
+            outputPrinter ("{0} Requires a username and password".format(version), typeOfMessage='error')
+            return
+
+        if bReqUserName:
+            securityinfo['security_type'] = 'Portal'#LDAP, NTLM, OAuth, Portal, PKI
+            securityinfo['username'] = username
+            securityinfo['password'] = password
+            securityinfo['org_url'] = siteURL
+
+        else:
+            securityinfo['security_type'] = 'ArcGIS'#LDAP, NTLM, OAuth, Portal, PKI
+
+        groupLayer = argv[3]
+        fsId = argv[4]
+        layerMap = argv[5]
+        matchEntireName = argv[6]
+        projection = argv[7]
+        lowerCaseFieldNames =argv[8]
+        showFullResponse =argv[9]
+
+        if str(lowerCaseFieldNames).upper() == 'TRUE':
+            lowerCaseFieldNames = True
+        else:
+            lowerCaseFieldNames = False
         if projection is not None and projection != '#' and projection != '':
             #outputPrinter(message="Projecting %s" % str(projection))
             pass
         else:
             projection = None
             #outputPrinter(message="No Projection defined")
-        arcpy.SetParameterAsText(5, "true")
+        arcpy.SetParameterAsText(10, "true")
 
         scratchGDB = arcpy.env.scratchWorkspace
         scratchLayName = "tempAppGrpFS"
@@ -111,54 +157,64 @@ def main():
                     del row
                 if groupLayer.isGroupLayer:
                     for lyr in groupLayer:
-                        for key, value in layerToServiceLayer.iteritems():
-                            if matchEntireName =='true' and key == lyr.name:
+                        for key, value in layerToServiceLayer.items():
+                            if str(matchEntireName).lower() =='true' and key == lyr.name:
                                 matches = True
-                            elif matchEntireName =='false' and key in lyr.name:
+                            elif str(matchEntireName).lower() =='false' and str(lyr.name).startswith(key):
                                 matches = True
                             else:
                                 matches = False
                             if matches:
-                                if arcpy.Exists(lyr.name) == True:
+                                #arcpy.env.workspace = lyr.workspacePath
+                                if arcpy.Exists(dataset=lyr) == True:
+                                    outputPrinter(message="\tProcessing %s" % (lyr.name))
                                     result =  arcpy.GetCount_management(lyr.name)
                                     count = int(result.getOutput(0))
+                                    outputPrinter(message="\t\t%s features" % (count))
                                     if count > 0:
                                         layerNameFull = groupLayer.name + '\\' + lyr.name
 
-                                        if projection is not None:
-                                            outputPrinter(message="Projecting %s" % lyr.name)
-                                            arcpy.Project_management(layerNameFull,
+                                        if projection is not None and projection != "#" and \
+                                                projection.strip() !='' :
+                                            outputPrinter(message="\t\tProjecting %s" % (lyr.name))
+                                            result = arcpy.Project_management(layerNameFull,
                                                                     scratchLayer,
-                                                                    projection,
-                                                                    "",
-                                                                    "",
-                                                                    "NO_PRESERVE_SHAPE",
-                                                                    "")
+                                                                    projection)
+
 
                                         else:
-                                            outputPrinter(message="Copying %s" % lyr.name)
+                                            outputPrinter(message="\t\tCopying %s feature from %s" % (count,lyr.name))
                                             arcpy.FeatureClassToFeatureClass_conversion(layerNameFull,scratchGDB,scratchLayName)
 
                                         desc = arcpy.Describe(scratchLayer)
                                         if desc.shapeType == 'Polygon':
-                                            outputPrinter(message="Densifying %s" % lyr.name)
+                                            outputPrinter(message="\t\tDensifying %s" % lyr.name)
                                             arcpy.Densify_edit(scratchLayer, "ANGLE", "33 Unknown", "0.33 Unknown", "4")
-                                        syncLayer(fst, fs, scratchLayer, value, lyr.name)
+                                        if desc.shapeType == 'Polyline':
+                                            outputPrinter(message="\t\tDensifying %s" % lyr.name)
+                                            arcpy.Densify_edit(scratchLayer, "ANGLE", "33 Unknown", "0.33 Unknown", "4")
+                                        syncLayer(fst, fs, scratchLayer, value, lyr.name,lowerCaseFieldNames,showFullResponse)
+                                        outputPrinter (message="\tComplete")
+                                        outputPrinter (message="\t")
 
                                     else:
-                                        outputPrinter (message="%s does not contain any features, skipping" % lyr.name)
+                                        outputPrinter (message="\t\t%s does not contain any features, skipping" % lyr.name)
+                                        outputPrinter (message="\tComplete")
+                                        outputPrinter (message="\t")
                                 else:
-                                    outputPrinter (message="%s does not exist, skipping" % lyr.name)
+                                    outputPrinter (message="\t%s does not exist, skipping" % lyr.name)
+                                    outputPrinter (message="\tComplete")
+                                    outputPrinter (message="\t")
                                 break
 
                 else:
                     outputPrinter (message="Group layer is not a group layer", typeOfMessage='error')
             else:
                 outputPrinter(message="Feature Service with id %s was not found" % fsId, typeOfMessage='error')
-                arcpy.SetParameterAsText(5, "false")
+                arcpy.SetParameterAsText(10, "false")
         else:
             outputPrinter(fst.message,typeOfMessage='error')
-            arcpy.SetParameterAsText(5, "false")
+            arcpy.SetParameterAsText(10, "false")
 
 
 
@@ -168,16 +224,16 @@ def main():
         outputPrinter(message="error in file name: %s" % filename,typeOfMessage='error')
         outputPrinter(message="with error message: %s" % synerror,typeOfMessage='error')
         outputPrinter(message="ArcPy Error Message: %s" % arcpy.GetMessages(2),typeOfMessage='error')
-        arcpy.SetParameterAsText(5, "false")
+        arcpy.SetParameterAsText(10, "false")
     except (common.ArcRestHelperError),e:
         outputPrinter(message=e,typeOfMessage='error')
-        arcpy.SetParameterAsText(5, "false")
+        arcpy.SetParameterAsText(10, "false")
     except:
         line, filename, synerror = trace()
         outputPrinter(message="error on line: %s" % line,typeOfMessage='error')
         outputPrinter(message="error in file name: %s" % filename,typeOfMessage='error')
         outputPrinter(message="with error message: %s" % synerror,typeOfMessage='error')
-        arcpy.SetParameterAsText(5, "false")
+        arcpy.SetParameterAsText(10, "false")
     finally:
         if scratchLayer is not None:
             if arcpy.Exists(scratchLayer):
@@ -209,24 +265,39 @@ def main():
         del layerToServiceLayer
 
         gc.collect()
-def syncLayer(fst, fs, layer, layerName, displayName):
+def syncLayer(fst, fs, layer, layerName, displayName, lowerCaseFieldNames, showFullResponse):
+    layerName = layerName.strip()
 
-    outputPrinter (message="Attemping to sync %s to %s" % (displayName,layerName))
+    outputPrinter (message="\t\tAttemping to sync %s to %s" % (displayName,layerName))
     fl = fst.GetLayerFromFeatureService(fs=fs,layerName=layerName,returnURLOnly=False)
     if not fl is None:
-        results = fl.addFeatures(fc=layer)
-
+        results = fl.addFeatures(fc=layer,lowerCaseFieldNames=lowerCaseFieldNames)
+        if str(showFullResponse).lower() =='true':
+            outputPrinter(message="\t\tResponse:  %s" % results)
         if 'error' in results:
-            outputPrinter(message="Error in response from server:  %s" % results['error'],typeOfMessage='error')
-            arcpy.SetParameterAsText(5, "false")
+            outputPrinter(message="\t\tError in response from server:  %s" % results['error'],typeOfMessage='error')
+            arcpy.SetParameterAsText(10, "false")
         else:
             if results['addResults'] is not None:
-                outputPrinter (message="%s features added to %s" % (len(results['addResults']),layerName) )
+                featSucces = 0
+                for result in results['addResults']:
+                    if 'success' in result:
+                        if result['success'] == False:
+                            if 'error' in result:
+
+                                outputPrinter (message="\t\t\tError info: %s" % (result['error']) )
+                        else:
+                            featSucces = featSucces + 1
+
+                outputPrinter (message="\t\t%s features added to %s" % (featSucces,layerName) )
             else:
-                outputPrinter (message="0 features added to %s" % layerName)
+                outputPrinter (message="\t\t0 features added to %s /n result info %s" % (layerName,str(results)))
     else:
-        outputPrinter(message="Layer %s was not found, please check your credentials and layer name" % layerName,typeOfMessage='error')
-        arcpy.SetParameterAsText(5, "false")
+        outputPrinter(message="\t\tLayer %s was not found, please check your credentials and layer name" % layerName,typeOfMessage='error')
+        arcpy.SetParameterAsText(10, "false")
 
 if __name__ == "__main__":
-    main()
+    argv = tuple(arcpy.GetParameterAsText(i)
+        for i in xrange(arcpy.GetArgumentCount()))
+    main(*argv)
+

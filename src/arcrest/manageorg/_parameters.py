@@ -334,6 +334,8 @@ class PortalParameters(BaseParameters):
     """
     The following parameters represent the properties of a portal
     """
+    _contacts = None
+    _authorizedCrossOriginDomains = None
     _canSharePublic = None
     _subscriptionInfo = None
     _defaultExtent = None
@@ -403,7 +405,9 @@ class PortalParameters(BaseParameters):
     _region = None
     _portalMode = None
     _creditAssignments = None
-    __allowed_keys = ["canSharePublic","subscriptionInfo","defaultExtent","supportsHostedServices",
+    __allowed_keys = ["creditAssignments", "contacts", "canSharePublic",
+                      "subscriptionInfo","defaultExtent",
+                      "supportsHostedServices", "authorizedCrossOriginDomains",
                       "homePageFeaturedContentCount","supportsOAuth","portalName","urlKey",
                       "databaseUsage","culture","helpBase","galleryTemplatesGroupQuery",
                       "commentsEnabled","metadataEditable","databaseQuota","id","canSearchPublic",
@@ -442,8 +446,9 @@ class PortalParameters(BaseParameters):
         """ returns the class as a dictionary """
         val = {}
         for k in self.__allowed_keys:
-            val = getattr(self, "_" + k)
-            val[k] = val
+            v = getattr(self, "_" + k)
+            if v is not None:
+                val[k] = v
         return val
     @property
     def canSharePublic(self):
@@ -466,6 +471,28 @@ class PortalParameters(BaseParameters):
         """gets/sets the property value subscriptionInfo"""
         if value is not None:
             self._subscriptionInfo = value
+    #----------------------------------------------------
+    @property
+    def contacts(self):
+        """gets/sets the property value contacts"""
+        return self._contacts
+    #----------------------------------------------------
+    @contacts.setter
+    def contacts(self,value):
+        """gets/sets the property value contacts"""
+        if value is not None:
+            self._contacts = value
+    #----------------------------------------------------
+    @property
+    def authorizedCrossOriginDomains(self):
+        """gets/sets the property value authorizedCrossOriginDomains"""
+        return self._contacts
+    #----------------------------------------------------
+    @authorizedCrossOriginDomains.setter
+    def authorizedCrossOriginDomains(self,value):
+        """gets/sets the property value authorizedCrossOriginDomains"""
+        if value is not None:
+            self._contacts = value
     #----------------------------------------------------
     @property
     def defaultExtent(self):
@@ -1230,6 +1257,7 @@ class ItemParameter(BaseParameters):
        type - The type of the item. Must be drawn from the list of
               supported types. See Items and item types for a list of the
               supported types.
+              http://resources.arcgis.com/en/help/arcgis-rest-api/#/Items_and_item_types/02r3000000ms000000/
        typeKeywords - Type keywords describe the type and should logically
                       apply to all items of that type. See Items and item
                       types for a list of the different predefined type
@@ -1255,7 +1283,10 @@ class ItemParameter(BaseParameters):
                          Server service. It is valid on Map Services,
                          Feature Services, and Image Services only.
        fileName - name of the file updating (optional)
+       archiveSelect - type of archive. Values: filegeodatabase
+       stylx - 2d or 3d value
     """
+    _archiveSelect = None
     _title = None
     _thumbnail = None
     _thumbnailurl = None
@@ -1274,6 +1305,7 @@ class ItemParameter(BaseParameters):
     _serviceUsername = None
     _servicePassword = None
     _filename = None
+    _stylx = None
     #----------------------------------------------------------------------
     def __init__(self):
         """Constructor"""
@@ -1434,6 +1466,16 @@ class ItemParameter(BaseParameters):
         """gets/sets an item description of any length"""
         if self._description != value:
             self._description = value
+    @property
+    def archiveSelect(self):
+        """ gets/sets an item archiveSelect value"""
+        return self._archiveSelect
+    #----------------------------------------------------------------------
+    @archiveSelect.setter
+    def archiveSelect(self, value):
+        """gets/sets an item description of any length"""
+        if self._archiveSelect != value:
+            self._archiveSelect = value
     #----------------------------------------------------------------------
     @property
     def tags(self):
@@ -1499,6 +1541,17 @@ class ItemParameter(BaseParameters):
         """gets/sets the coordinate system of the item """
         if self._spatialReference != value:
             self._spatialReference = value
+    #----------------------------------------------------------------------
+    @property
+    def stylx(self):
+        """gets/sets the stylx value"""
+        return self._stylx
+    #----------------------------------------------------------------------
+    @stylx.setter
+    def stylx(self, value):
+        """gets/sets the stylx value"""
+        if self._stylx != value:
+            self._stylx = value
     #----------------------------------------------------------------------
     @property
     def accessInformation(self):
@@ -2506,7 +2559,7 @@ class PublishFGDBParameter(BaseParameters):
         return json.dumps(self.value)
 
 ########################################################################
-class PublishSDParmaeters(BaseParameters):
+class PublishSDParameters(BaseParameters):
     """
     Required parameters to publish SD Parameters
     """

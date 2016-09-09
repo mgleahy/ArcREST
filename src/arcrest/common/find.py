@@ -1,13 +1,12 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import six
-if six.PY2:
-    from ..web._base import BaseWebOperations
-else:
-    from ..web._base import BaseWebOperations3 as BaseWebOperations
+from ..packages import six
+from ..web._base import BaseWebOperations
 _url = None
 _securityHandler = None
-
+_proxy_url = None
+_proxy_port = None
+_referer_url = None
 class search(BaseWebOperations):
     def __init__(self, url=None, securityHandler=None, proxy_url=None, proxy_port=None):
         """Constructor"""
@@ -19,7 +18,7 @@ class search(BaseWebOperations):
         else:
             self._proxy_url = proxy_url
         if proxy_port is None and not securityHandler is None:
-            self.proxy_port = securityHandler.proxy_port
+            self._proxy_port = securityHandler.proxy_port
         else:
             self._proxy_port = proxy_port
 
@@ -97,6 +96,8 @@ class search(BaseWebOperations):
               'Workflow Manager Package',
               'Web Mapping Application',
               'Web Map']
+        title = title.replace(":"," ")
+
         if username is None:
             username = self._securityHandler.username
         if searchorg == True:
@@ -131,7 +132,7 @@ class search(BaseWebOperations):
 
         else:
             pass
-        jsonResponse = self._do_get(url=self._url,
+        jsonResponse = self._get(url=self._url,
                                    securityHandler=self._securityHandler,
                                    param_dict=params,
                                    proxy_url=self._proxy_url,

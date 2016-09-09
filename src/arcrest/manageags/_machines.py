@@ -5,8 +5,8 @@ import json
 ########################################################################
 class Machines(BaseAGSServer):
     """
-       his resource represents a collection of all the server machines that
-       have been registered with the site. It other words, it represents
+       This resource represents a collection of all the server machines that
+       have been registered with the site. In other words, it represents
        the total computing power of your site. A site will continue to run
        as long as there is one server machine online.
        For a server machine to start hosting GIS services, it must be
@@ -47,7 +47,7 @@ class Machines(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        json_dict = self._do_get(url=self._url,
+        json_dict = self._get(url=self._url,
                                  param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
@@ -123,7 +123,7 @@ class Machines(BaseAGSServer):
            choose to join a site.
            Inputs:
               machineName - name of the server machine
-              adminURL - URL wher ethe Administrator API is running on the
+              adminURL - URL where the Administrator API is running on the
                          server machine.
                          Example: http://<machineName>:6080/arcgis/admin
            Output:
@@ -135,7 +135,7 @@ class Machines(BaseAGSServer):
             "adminURL" : adminURL
         }
         uURL = "%s/register" % self._url
-        return self._do_post(url=uURL, param_dict=params,
+        return self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -162,7 +162,7 @@ class Machines(BaseAGSServer):
             "newMachineName" : newMachineName
         }
         uURL = self._url + "/rename"
-        return self._do_post(url=uURL, param_dict=params,
+        return self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url                             )
@@ -204,6 +204,7 @@ class Machine(BaseAGSServer):
     _proxy_url = None
     _securityHandler = None
     _json = None
+    _sslcertificates = None
     #----------------------------------------------------------------------
     def __init__(self, url, securityHandler,
                  initialize=False, proxy_url=None, proxy_port=None):
@@ -225,7 +226,7 @@ class Machine(BaseAGSServer):
         params = {
             "f" : "json"
         }
-        json_dict = self._do_get(url=self._currentURL,
+        json_dict = self._get(url=self._currentURL,
                                  param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
@@ -247,6 +248,90 @@ class Machine(BaseAGSServer):
         if self._json is None:
             self.__init()
         return self._json
+    #----------------------------------------------------------------------
+    @property
+    def sslCertificates(self):
+        """gets the SSL Certificates for a given machine"""
+        url = self._url + "/sslcertificates"
+        params = {
+            "f" : "json",
+        }
+        return self._get(url=url,
+                         param_dict=params,
+                         securityHandler=self._securityHandler,
+                         proxy_url=self._proxy_url,
+                         proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def getCertificate(self, certificate):
+        """gets the SSL Certificates for a given machine"""
+        url = self._url + "/sslcertificates/%s" % certificate
+        params = {
+            "f" : "json",
+        }
+        return self._get(url=url,
+                            param_dict=params,
+                            securityHandler=self._securityHandler,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def exportCertificate(self, certificate, folder):
+        """gets the SSL Certificates for a given machine"""
+        url = self._url + "/sslcertificates/%s/export" % certificate
+        params = {
+            "f" : "json",
+        }
+        return self._get(url=url,
+                         param_dict=params,
+                        out_folder=folder)
+    #----------------------------------------------------------------------
+    def importRootCertificate(self, alias, rootCACertificate):
+        """This operation imports a certificate authority (CA)'s root and intermediate certificates into the keystore."""
+        url = self._url + "/sslcertificates/importRootOrIntermediate"
+        files = {}
+        files['rootCACertificate'] = rootCACertificate
+        params = {
+            "f" : "json",
+            "alias" : alias
+        }
+        return self._post(url=url,
+                            param_dict=params,
+                            securityHandler=self._securityHandler,
+                            files=files,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def importExistingServerCertificate(self, alias, certPassword, certFile):
+        """This operation imports an existing server certificate, stored in the PKCS #12 format, into the keystore."""
+        url = self._url + "/sslcertificates/importExistingServerCertificate"
+        files = {}
+        files['certFile'] = certFile
+        params = {
+            "f" : "json",
+            "alias" : alias,
+            "certPassword" : certPassword
+        }
+        return self._post(url=url,
+                            param_dict=params,
+                            securityHandler=self._securityHandler,
+                            files=files,
+                            proxy_url=self._proxy_url,
+                            proxy_port=self._proxy_port)
+    #----------------------------------------------------------------------
+    def importCASignedCertificate(self, alias, caSignedCertificate):
+        """This operation imports a certificate authority (CA)-signed SSL certificate into the key store."""
+        url = self._url + "/sslcertificates/importCASignedCertificate"
+        files = {}
+        files['caSignedCertificate'] = caSignedCertificate
+        params = {
+            "f" : "json",
+            "alias" : alias
+        }
+        return self._post(url=url,
+                          param_dict=params,
+                          securityHandler=self._securityHandler,
+                          files=files,
+                          proxy_url=self._proxy_url,
+                          proxy_port=self._proxy_port)
     #----------------------------------------------------------------------
     @property
     def appServerMaxHeapSize(self):
@@ -339,7 +424,7 @@ class Machine(BaseAGSServer):
         params = {
             "f" : "json",
         }
-        return self._do_get(url=uURL, param_dict=params,
+        return self._get(url=uURL, param_dict=params,
                             securityHandler=self._securityHandler,
                             proxy_port=self._proxy_port,
                             proxy_url=self._proxy_url)
@@ -350,7 +435,7 @@ class Machine(BaseAGSServer):
             "f" : "json"
         }
         uURL = self._url + "/start"
-        return self._do_post(url=uURL, param_dict=params,
+        return self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -361,7 +446,7 @@ class Machine(BaseAGSServer):
             "f" : "json"
         }
         uURL = self._url + "/stop"
-        return self._do_post(url=uURL, param_dict=params,
+        return self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)
@@ -383,7 +468,7 @@ class Machine(BaseAGSServer):
             "f" : "json"
         }
         uURL = self._url + "/start"
-        return self._do_post(url=uURL, param_dict=params,
+        return self._post(url=uURL, param_dict=params,
                              securityHandler=self._securityHandler,
                              proxy_port=self._proxy_port,
                              proxy_url=self._proxy_url)

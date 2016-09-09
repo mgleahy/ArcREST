@@ -9,6 +9,8 @@ import json
 from . import _community, _content, _portals, _oauth2
 from ..hostedservice import Services
 from ..manageags import AGSAdministration
+from ..packages.six.moves.urllib_parse import urlparse, urlunparse
+
 ########################################################################
 class Administration(BaseAGOLClass):
     """  Administers the AGOL/Portal Site """
@@ -33,33 +35,41 @@ class Administration(BaseAGOLClass):
             url = securityHandler.org_url
         if url is None or url == '':
             raise AttributeError("URL or Security Handler needs to be specified")
-
         if url.lower().find("/sharing") > -1:
-            pass
-        else:
-            url = url + "/sharing"
-
-        if url.lower().find("/rest") > -1:
             self._url = url
         else:
-            self._url = url + "/rest"
-
+            self._url = url + "/sharing"
+        #if url.lower().find("/rest") > -1:
+            #self._url = url
+        #else:
+            #self._url = url + "/rest"
         self._proxy_url = proxy_url
         self._proxy_port = proxy_port
         if securityHandler is not None:
-
             self._referer_url = securityHandler.referer_url
         else:
             raise AttributeError("Security Handler is required for the administration function")
+
+        urlInfo = urlparse(self._url)
+        if str(urlInfo.netloc).lower() == "www.arcgis.com":
+            portalSelf = self.portals.portalSelf
+            urlInfo=urlInfo._replace(netloc= "%s.%s" % (portalSelf.urlKey, portalSelf.customBaseUrl))
+            self._url = urlunparse(urlInfo)
+            self._securityHandler.referer_url = "%s.%s" % (portalSelf.urlKey, portalSelf.customBaseUrl)
+            self._url = "https://%s.%s%s" % (portalSelf.urlKey, portalSelf.customBaseUrl, urlInfo.path)
+            del portalSelf
+
         if initialize:
-            self.__init(url=url)
+            self.__init(url=self._url)
     #----------------------------------------------------------------------
-    def __init(self, url):
+    def __init(self, url=None):
         """ initializes the site properties """
         params = {
             "f" : "json"
         }
-        json_dict = self._do_get(url=url,
+        if url is None:
+            url = self._url
+        json_dict = self._get(url=url,
                                  param_dict=params,
                                  securityHandler=self._securityHandler,
                                  proxy_port=self._proxy_port,
@@ -230,7 +240,8 @@ class Administration(BaseAGOLClass):
             "q" : q,
             "sortOrder" : sortOrder,
             "num" : num,
-            "start" : start
+            "start" : start,
+            'restrict' : useSecurity
         }
         if not focus is None:
             params['focus'] = focus
@@ -245,13 +256,14 @@ class Administration(BaseAGOLClass):
         if bbox is not None:
             params['bbox'] = bbox
 
-        return self._do_get(url=url,
+        return self._get(url=url,
                         param_dict=params,
                         securityHandler=self._securityHandler,
                         proxy_url=self._proxy_url,
                         proxy_port=self._proxy_port)
 
     #----------------------------------------------------------------------
+    @property
     def hostingServers(self):
         """
           Returns the objects to manage site's hosted services. It returns
