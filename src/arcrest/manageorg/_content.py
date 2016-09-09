@@ -2146,7 +2146,7 @@ class User(BaseAGOLClass):
                 }
             self.__init()
         elif value == "/" or value.lower() == 'root':
-            self.location = self.root
+            self._location = self.root
             self._currentFolder = {
                     'title': 'root',
                     'id': None,
